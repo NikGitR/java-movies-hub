@@ -4,12 +4,15 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.sun.net.httpserver.HttpExchange;
 import ru.practicum.moviehub.api.ErrorResponse;
+import ru.practicum.moviehub.api.ValidationErrorResponse;
 import ru.practicum.moviehub.model.Movie;
 import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.OptionalInt;
 
 public class MoviesHandler extends BaseHttpHandler {
     private static final long MIN_MOVIE_ID = 1;
@@ -17,11 +20,11 @@ public class MoviesHandler extends BaseHttpHandler {
     private static final int MAX_TITLE_LENGTH = 100;
 
     private final MoviesStore store;
-    private final Gson gson;
+
 
     public MoviesHandler(MoviesStore store, Gson gson) {
+        super(gson);
         this.store = store;
-        this.gson = gson;
     }
 
     @Override
@@ -50,9 +53,9 @@ public class MoviesHandler extends BaseHttpHandler {
             return;
         }
 
-        Integer year = parseYear(query);
+        OptionalInt parsedYear = parseYear(query);
 
-        if (year == null) {
+        if (parsedYear.isEmpty()) {
             sendError(
                     exchange,
                     400,
@@ -61,12 +64,14 @@ public class MoviesHandler extends BaseHttpHandler {
             return;
         }
 
-        Optional<Movie> movies = store.findById(year);
+        int year = parsedYear.getAsInt();
+
+        List<Movie> movies = store.findByReleaseYear(year);
         sendJson(exchange, 200, gson.toJson(movies));
     }
 
     private void handlePost(HttpExchange exchange) throws IOException {
-        MovieRequest request;
+        Movie movie;
 
         try {
             String requestBody = new String(
@@ -74,24 +79,22 @@ public class MoviesHandler extends BaseHttpHandler {
                     StandardCharsets.UTF_8
             );
 
-            request = gson.fromJson(requestBody, MovieRequest.class);
+            movie = gson.fromJson(requestBody, Movie.class);
         } catch (JsonParseException exception) {
             sendError(exchange, 400, "Некорректный JSON");
             return;
         }
 
-        String validationError = validate(request);
+        List<String> validationErrors = validate(movie);
 
-        if (validationError != null) {
-            sendError(exchange, 400, validationError);
+        if (!validationErrors.isEmpty()) {
+            sendJson(
+                    exchange,
+                    400,
+                    gson.toJson(new ValidationErrorResponse(validationErrors))
+            );
             return;
         }
-
-        Movie movie = new Movie(
-                request.id,
-                request.title,
-                request.releaseYear
-        );
 
         try {
             store.add(movie);
@@ -106,49 +109,54 @@ public class MoviesHandler extends BaseHttpHandler {
         sendJson(exchange, 201, gson.toJson(movie));
     }
 
-    private String validate(MovieRequest request) {
-        if (request == null) {
-            return "Тело запроса не должно быть пустым";
+    private List<String> validate(Movie movie) {
+        List<String> errors = new ArrayList<>();
+
+        if (movie == null) {
+            errors.add("Тело запроса не должно быть пустым");
+            return errors;
         }
 
-        if (request.id < MIN_MOVIE_ID) {
-            return "Идентификатор должен быть положительным";
+        if (movie.getId() < MIN_MOVIE_ID) {
+            errors.add("Идентификатор должен быть положительным");
         }
 
-        if (request.title == null || request.title.isBlank()) {
-            return "Название фильма не должно быть пустым";
+        if (movie.getTitle() == null || movie.getTitle().isBlank()) {
+            errors.add("Название фильма не должно быть пустым");
+        } else if (movie.getTitle().length() > MAX_TITLE_LENGTH) {
+            errors.add(
+                    "Название фильма не должно превышать "
+                            + MAX_TITLE_LENGTH + " символов"
+            );
         }
 
-        if (request.title.length() > MAX_TITLE_LENGTH) {
-            return "Название фильма не должно превышать "
-                    + MAX_TITLE_LENGTH + " символов";
+        if (movie.getReleaseYear() < MIN_RELEASE_YEAR) {
+            errors.add(
+                    "Год выпуска не может быть меньше "
+                            + MIN_RELEASE_YEAR
+            );
         }
 
-        if (request.releaseYear < MIN_RELEASE_YEAR) {
-            return "Год выпуска не может быть меньше "
-                    + MIN_RELEASE_YEAR;
-        }
-
-        return null;
+        return errors;
     }
 
-    private Integer parseYear(String query) {
+    private OptionalInt parseYear(String query) {
         String[] parameters = query.split("&");
 
         if (parameters.length != 1) {
-            return null;
+            return OptionalInt.empty();
         }
 
         String[] pair = parameters[0].split("=", -1);
 
         if (pair.length != 2 || !"year".equals(pair[0])) {
-            return null;
+            return OptionalInt.empty();
         }
 
         try {
-            return Integer.parseInt(pair[1]);
+            return OptionalInt.of(Integer.parseInt(pair[1]));
         } catch (NumberFormatException exception) {
-            return null;
+            return OptionalInt.empty();
         }
     }
 
@@ -164,9 +172,4 @@ public class MoviesHandler extends BaseHttpHandler {
         );
     }
 
-    private static class MovieRequest {
-        private long id;
-        private String title;
-        private int releaseYear;
-    }
 }

@@ -13,11 +13,10 @@ public class MovieByIdHandler extends BaseHttpHandler {
     private static final String PATH_PREFIX = "/movies/";
 
     private final MoviesStore store;
-    private final Gson gson;
 
     public MovieByIdHandler(MoviesStore store, Gson gson) {
+        super(gson);
         this.store = store;
-        this.gson = gson;
     }
 
     @Override

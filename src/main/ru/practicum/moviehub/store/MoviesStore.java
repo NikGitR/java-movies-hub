@@ -18,6 +18,13 @@ public class MoviesStore {
         }
     }
 
+    public List<Movie> findByReleaseYear(int releaseYear) {
+        return movies.values().stream()
+                .filter(movie ->
+                        movie.getReleaseYear() == releaseYear)
+                .toList();
+    }
+
     public List<Movie> findAll() {
         return new ArrayList<>(movies.values());
     }

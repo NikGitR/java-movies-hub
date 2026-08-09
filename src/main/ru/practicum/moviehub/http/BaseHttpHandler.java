@@ -1,5 +1,6 @@
 package ru.practicum.moviehub.http;
 
+import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -9,6 +10,12 @@ import java.nio.charset.StandardCharsets;
 
 public abstract class BaseHttpHandler implements HttpHandler {
     protected static final String CT_JSON = "application/json; charset=UTF-8";
+
+    protected final Gson gson;
+
+    protected BaseHttpHandler(Gson gson) {
+        this.gson = gson;
+    }
 
     protected void sendJson(HttpExchange exchange, int status, String json)
             throws IOException {

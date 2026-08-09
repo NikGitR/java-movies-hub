@@ -190,13 +190,13 @@ public class MoviesApiTest {
     @Test
     void postMovie_withInvalidFields_returnsAllErrors()
             throws Exception {
-        String requestBody = """
-                {
-                  "id": 0,
-                  "title": "",
-                  "releaseYear": 1800
-                }
-                """;
+        Movie invalidMovie = new Movie(
+                0,
+                "",
+                1800
+        );
+
+        String requestBody = GSON.toJson(invalidMovie);
 
         HttpResponse<String> response = send(
                 "POST",
